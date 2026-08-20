@@ -16,7 +16,7 @@ repo        = "https://github.com/mcpplibs/sbase"
 # of openkal it needs for the target being built, because it is the only party
 # that knows a program above it carries no other runtime.
 [dependencies]
-openkal-musl = "0.3.0"
+openkal-musl = "0.3.1"
 
 [build]
 # What a program above this package must say, and why it is one line.
