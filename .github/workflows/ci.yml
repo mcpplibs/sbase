@@ -61,30 +61,27 @@ jobs:
           branch='${{ inputs.deps_ref || github.head_ref || github.ref_name }}'
           beside="$(cd .. && pwd)"
 
-          case '${{ matrix.target }}${{ matrix.os }}' in
-            x86_64-windows-gnu*) implementation=openkal-windows ;;
-            *macos*)             implementation=openkal-macos   ;;
-            *)                   implementation=openkal-linux   ;;
-          esac
+          git clone --quiet https://github.com/mcpplibs/openkal-musl.git "$beside/openkal-musl"
+          if git -C "$beside/openkal-musl" rev-parse --verify --quiet "origin/$branch" > /dev/null; then
+            git -C "$beside/openkal-musl" checkout --quiet "origin/$branch"
+            echo "openkal-musl is at $branch $(git -C "$beside/openkal-musl" rev-parse --short HEAD)"
+          else
+            echo "openkal-musl has no $branch; its default branch is used" \
+                 "($(git -C "$beside/openkal-musl" rev-parse --short HEAD))"
+          fi
 
-          for repo in openkal-musl openkal "$implementation"; do
-            git clone --quiet "https://github.com/mcpplibs/$repo.git" "$beside/$repo"
-            if git -C "$beside/$repo" rev-parse --verify --quiet "origin/$branch" > /dev/null; then
-              git -C "$beside/$repo" checkout --quiet "origin/$branch"
-              echo "$repo is at $branch"
-            else
-              echo "$repo has no $branch; its default branch is used"
-            fi
-          done
+          # The C library places the specification and the implementation for
+          # this system beside itself, and points its own manifest at them. That
+          # is its script rather than a copy of it here: this workflow had a copy,
+          # the C library then began naming its implementation by version --- which
+          # is what a published manifest must do --- and the copy went on rewriting
+          # only the specification. What mcpp reported was one package requested
+          # as a path and as a version at once, which named neither the copy nor
+          # the change.
+          bash "$beside/openkal-musl/tools/working-trees.sh" "$branch"
 
-          # Every manifest that reaches the specification is rewritten, because
-          # a package may be reached by a path or by a version and not by both.
+          # And this package's own reference to the C library.
           native() { if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
-          spec="$(native "$beside/openkal")"
-          for m in "$beside/openkal-musl/mcpp.toml" "$beside/$implementation/mcpp.toml"; do
-            sed "s|^openkal = .*$|openkal = { path = \"$spec\" }|" "$m" > "$m.next"
-            mv "$m.next" "$m"
-          done
           libc="$(native "$beside/openkal-musl")"
           sed "s|^openkal-musl = .*$|openkal-musl = { path = \"$libc\" }|" mcpp.toml > mcpp.toml.next
           mv mcpp.toml.next mcpp.toml
