@@ -1,0 +1,164 @@
+name: CI
+
+# What this workflow asserts.
+#
+# sbase has no Windows support and does not build on macOS as it stands. This
+# workflow builds all ninety-seven of its tools on both, from sources this
+# repository does not patch, and then asserts that what they produce is right
+# rather than merely that they produced something.
+#
+# The comparison is the point. A build that succeeds proves that a compiler
+# accepted the sources; fifty comparisons against the system's own tools and
+# against the answers the standard requires prove that the programs work.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  MCPP_VERSION: 2026.8.19.4
+  XLINGS_VERSION: v2026.8.17.2
+  XLINGS_NON_INTERACTIVE: '1'
+
+jobs:
+  tools:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: 'linux, gcc',   os: ubuntu-24.04, toolchain: 'gcc@16.1.0',  target: '',                   wine: false }
+          - { name: 'linux, llvm',  os: ubuntu-24.04, toolchain: 'llvm@22.1.8', target: '',                   wine: false }
+          - { name: 'macos, llvm',  os: macos-14,     toolchain: 'llvm@20.1.7', target: '',                   wine: false }
+          - { name: 'windows, gcc', os: windows-2022, toolchain: 'gcc@16.1.0',  target: 'x86_64-windows-gnu', wine: false }
+          - { name: 'linux to windows, under wine',
+                                    os: ubuntu-24.04, toolchain: 'gcc@16.1.0',  target: 'x86_64-windows-gnu', wine: true  }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # The C library and everything beneath it, at the branch under test where
+      # each has one. A run therefore asserts that these sources and that stack
+      # as written today work together, rather than that they worked at the
+      # version a manifest names.
+      - name: The C library, the specification, and the implementation
+        run: |
+          branch='${{ github.head_ref || github.ref_name }}'
+          beside="$(cd .. && pwd)"
+
+          case '${{ matrix.target }}${{ matrix.os }}' in
+            x86_64-windows-gnu*) implementation=openkal-windows ;;
+            *macos*)             implementation=openkal-macos   ;;
+            *)                   implementation=openkal-linux   ;;
+          esac
+
+          for repo in openkal-musl openkal "$implementation"; do
+            git clone --quiet "https://github.com/mcpplibs/$repo.git" "$beside/$repo" || {
+              # The C library's repository was named openkal-libc before it was
+              # named for what it is. A clone that fails on the new name is
+              # retried on the old one, so that this workflow works either side
+              # of the rename.
+              [ "$repo" = openkal-musl ] || exit 1
+              git clone --quiet https://github.com/mcpplibs/openkal-libc.git "$beside/openkal-musl"
+            }
+            if git -C "$beside/$repo" rev-parse --verify --quiet "origin/$branch" > /dev/null; then
+              git -C "$beside/$repo" checkout --quiet "origin/$branch"
+              echo "$repo is at $branch"
+            else
+              echo "$repo has no $branch; its default branch is used"
+            fi
+          done
+
+          # Every manifest that reaches the specification is rewritten, because
+          # a package may be reached by a path or by a version and not by both.
+          native() { if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
+          spec="$(native "$beside/openkal")"
+          for m in "$beside/openkal-musl/mcpp.toml" "$beside/$implementation/mcpp.toml"; do
+            sed "s|^openkal = .*$|openkal = { path = \"$spec\" }|" "$m" > "$m.next"
+            mv "$m.next" "$m"
+          done
+          libc="$(native "$beside/openkal-musl")"
+          sed "s|^openkal-musl = .*$|openkal-musl = { path = \"$libc\" }|" mcpp.toml > mcpp.toml.next
+          mv mcpp.toml.next mcpp.toml
+          sed -n '/^\[dependencies\]/,/^$/p' mcpp.toml
+
+      - name: Install xlings (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh \
+            | bash -s "$XLINGS_VERSION"
+          echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+
+      - name: Install xlings (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://d2learn.org/xlings-install.ps1.txt | iex
+          "$env:USERPROFILE\.xlings\subos\current\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install mcpp
+        run: |
+          xlings update
+          xlings install "mcpp@$MCPP_VERSION" -y -g
+          mcpp --version
+          mcpp self config --mirror GLOBAL
+
+      - name: Select the toolchain
+        run: |
+          spec='${{ matrix.toolchain }}'
+          mcpp toolchain install "${spec%@*}" "${spec#*@}"
+          mcpp toolchain default "$spec"
+
+      - name: Install wine
+        if: matrix.wine
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends wine64 > /dev/null
+          wine64 --version
+
+      - name: All ninety-seven tools build
+        run: |
+          extra=''
+          [ -n '${{ matrix.target }}' ] && extra='--target ${{ matrix.target }}'
+          mcpp build $extra
+          built="$(find target -type f \( -perm -u+x -o -name '*.exe' \) -path '*/bin/*' | wc -l)"
+          echo "$built binaries"
+          expected="$(ls upstream/*.c | wc -l)"
+          test "$built" -eq "$expected" || {
+            echo "expected $expected binaries and found $built" >&2; exit 1; }
+
+      - name: What they produce is what the system produces
+        if: '!matrix.wine'
+        run: |
+          sh tests/oracle.sh "$(dirname "$(find target -type f -path '*/bin/*' \( -name wc -o -name wc.exe \) | head -1)")"
+
+      # The same binaries, run under an implementation of the interfaces they
+      # were built for rather than on the system that has them. It is here
+      # because a package that can only be checked on the system it targets is a
+      # package a contributor on any other system cannot check.
+      - name: What they produce, under wine
+        if: matrix.wine
+        env:
+          WINEDEBUG: '-all'
+        run: |
+          # The programs are Windows programs and the shell is not, so each is
+          # given a name the shell can start. The directory also holds the
+          # programs themselves, because one of the comparisons hands a path to
+          # a program rather than to the shell.
+          out="$PWD/.wine-bin"
+          rm -rf "$out" && mkdir -p "$out"
+          for exe in $(find target -type f -name '*.exe' -path '*/bin/*'); do
+            n="$(basename "$exe" .exe)"
+            cp "$exe" "$out/$n.exe"
+            printf '#!/bin/sh\nexec wine64 "%s/%s.exe" "$@"\n' "$out" "$n" > "$out/$n"
+            chmod +x "$out/$n"
+          done
+          # wine names this system's root as a volume of its own, which is the
+          # spelling the programs' C library resolves.
+          ORACLE_NATIVE_PREFIX=Z: sh tests/oracle.sh "$out"

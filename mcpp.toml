@@ -1,0 +1,442 @@
+[package]
+namespace   = "mcpplibs"
+name        = "sbase"
+version     = "0.1.0"
+description = "The suckless base utilities, recompiled above openkal-musl. The sources are upstream's, unmodified; what changes is the C library beneath them, and with it the set of systems they run on."
+license     = "MIT"
+authors     = ["mcpplibs"]
+repo        = "https://github.com/mcpplibs/sbase"
+
+# One dependency, and it is a C library.
+#
+# The programs name no operating system, no implementation of openkal and no
+# platform. That is the claim this package exists to test: a program is written
+# against a C library, and which systems it runs on is a property of that
+# library rather than of the program. openkal-musl declares the implementation
+# of openkal it needs for the target being built, because it is the only party
+# that knows a program above it carries no other runtime.
+[dependencies]
+openkal-musl = "0.1.0"
+
+[build]
+# The two libraries every tool links against. The tools themselves are not here:
+# each is the exclusive entry of a target below, and a source that is both a
+# shared object and an entry would put ninety-three definitions of main into
+# every link.
+sources = ["upstream/libutil/*.c", "upstream/libutf/*.c",
+           # Upstream builds these two into archives, so a compatibility
+           # definition it carries for a C library that lacks a function is
+           # pulled in only when nothing else defines it. This tool links
+           # objects rather than archives --- which is why the tools are one
+           # package rather than ninety-seven --- so a definition present in
+           # both places is present twice.
+           #
+           # Every other such definition upstream renames (`strlcpy' becomes
+           # `xstrlcpy' in util.h, and so on), which is why the list is one
+           # entry. It is excluded here rather than deleted: the vendored
+           # sources are upstream's, and what this package changes is the C
+           # library beneath them and not them.
+           "!upstream/libutil/reallocarray.c",
+           "compat/*.c"]
+
+include_dirs = ["upstream", "generated"]
+
+# The feature macros upstream's own Makefile states, copied from it rather than
+# inferred. They select which declarations the C library's headers expose, and a
+# program compiled with a different set from the one its author chose is a
+# program whose headers say something else.
+cflags = ["-D_DEFAULT_SOURCE", "-D_NETBSD_SOURCE", "-D_BSD_SOURCE",
+          "-D_XOPEN_SOURCE=700", "-D_FILE_OFFSET_BITS=64",
+          # Upstream builds with warnings on and does not treat them as errors.
+          # A vendored copy is not the place to start doing so: a warning here
+          # would be a warning about somebody else's source, on a compiler they
+          # did not choose.
+          "-w"]
+
+[targets.basename]
+kind = "bin"
+main = "upstream/basename.c"
+
+[targets.cal]
+kind = "bin"
+main = "upstream/cal.c"
+
+[targets.cat]
+kind = "bin"
+main = "upstream/cat.c"
+
+[targets.chgrp]
+kind = "bin"
+main = "upstream/chgrp.c"
+
+[targets.chmod]
+kind = "bin"
+main = "upstream/chmod.c"
+
+[targets.chown]
+kind = "bin"
+main = "upstream/chown.c"
+
+[targets.chroot]
+kind = "bin"
+main = "upstream/chroot.c"
+
+[targets.cksum]
+kind = "bin"
+main = "upstream/cksum.c"
+
+[targets.cmp]
+kind = "bin"
+main = "upstream/cmp.c"
+
+[targets.cols]
+kind = "bin"
+main = "upstream/cols.c"
+
+[targets.comm]
+kind = "bin"
+main = "upstream/comm.c"
+
+[targets.cp]
+kind = "bin"
+main = "upstream/cp.c"
+
+[targets.cron]
+kind = "bin"
+main = "upstream/cron.c"
+
+[targets.cut]
+kind = "bin"
+main = "upstream/cut.c"
+
+[targets.date]
+kind = "bin"
+main = "upstream/date.c"
+
+[targets.dd]
+kind = "bin"
+main = "upstream/dd.c"
+
+[targets.dirname]
+kind = "bin"
+main = "upstream/dirname.c"
+
+[targets.du]
+kind = "bin"
+main = "upstream/du.c"
+
+[targets.echo]
+kind = "bin"
+main = "upstream/echo.c"
+
+[targets.ed]
+kind = "bin"
+main = "upstream/ed.c"
+
+[targets.env]
+kind = "bin"
+main = "upstream/env.c"
+
+[targets.expand]
+kind = "bin"
+main = "upstream/expand.c"
+
+[targets.expr]
+kind = "bin"
+main = "upstream/expr.c"
+
+[targets.false]
+kind = "bin"
+main = "upstream/false.c"
+
+[targets.find]
+kind = "bin"
+main = "upstream/find.c"
+
+[targets.flock]
+kind = "bin"
+main = "upstream/flock.c"
+
+[targets.fold]
+kind = "bin"
+main = "upstream/fold.c"
+
+[targets.getconf]
+kind = "bin"
+main = "upstream/getconf.c"
+
+[targets.grep]
+kind = "bin"
+main = "upstream/grep.c"
+
+[targets.head]
+kind = "bin"
+main = "upstream/head.c"
+
+[targets.hostname]
+kind = "bin"
+main = "upstream/hostname.c"
+
+[targets.join]
+kind = "bin"
+main = "upstream/join.c"
+
+[targets.kill]
+kind = "bin"
+main = "upstream/kill.c"
+
+[targets.link]
+kind = "bin"
+main = "upstream/link.c"
+
+[targets.ln]
+kind = "bin"
+main = "upstream/ln.c"
+
+[targets.logger]
+kind = "bin"
+main = "upstream/logger.c"
+
+[targets.logname]
+kind = "bin"
+main = "upstream/logname.c"
+
+[targets.ls]
+kind = "bin"
+main = "upstream/ls.c"
+
+[targets.md5sum]
+kind = "bin"
+main = "upstream/md5sum.c"
+
+[targets.mkdir]
+kind = "bin"
+main = "upstream/mkdir.c"
+
+[targets.mkfifo]
+kind = "bin"
+main = "upstream/mkfifo.c"
+
+[targets.mknod]
+kind = "bin"
+main = "upstream/mknod.c"
+
+[targets.mktemp]
+kind = "bin"
+main = "upstream/mktemp.c"
+
+[targets.mv]
+kind = "bin"
+main = "upstream/mv.c"
+
+[targets.nice]
+kind = "bin"
+main = "upstream/nice.c"
+
+[targets.nl]
+kind = "bin"
+main = "upstream/nl.c"
+
+[targets.nohup]
+kind = "bin"
+main = "upstream/nohup.c"
+
+[targets.od]
+kind = "bin"
+main = "upstream/od.c"
+
+[targets.paste]
+kind = "bin"
+main = "upstream/paste.c"
+
+[targets.pathchk]
+kind = "bin"
+main = "upstream/pathchk.c"
+
+[targets.printenv]
+kind = "bin"
+main = "upstream/printenv.c"
+
+[targets.printf]
+kind = "bin"
+main = "upstream/printf.c"
+
+[targets.pwd]
+kind = "bin"
+main = "upstream/pwd.c"
+
+[targets.readlink]
+kind = "bin"
+main = "upstream/readlink.c"
+
+[targets.renice]
+kind = "bin"
+main = "upstream/renice.c"
+
+[targets.rev]
+kind = "bin"
+main = "upstream/rev.c"
+
+[targets.rm]
+kind = "bin"
+main = "upstream/rm.c"
+
+[targets.rmdir]
+kind = "bin"
+main = "upstream/rmdir.c"
+
+[targets.sed]
+kind = "bin"
+main = "upstream/sed.c"
+
+[targets.seq]
+kind = "bin"
+main = "upstream/seq.c"
+
+[targets.setsid]
+kind = "bin"
+main = "upstream/setsid.c"
+
+[targets.sha1sum]
+kind = "bin"
+main = "upstream/sha1sum.c"
+
+[targets.sha224sum]
+kind = "bin"
+main = "upstream/sha224sum.c"
+
+[targets.sha256sum]
+kind = "bin"
+main = "upstream/sha256sum.c"
+
+[targets.sha384sum]
+kind = "bin"
+main = "upstream/sha384sum.c"
+
+[targets.sha512-224sum]
+kind = "bin"
+main = "upstream/sha512-224sum.c"
+
+[targets.sha512-256sum]
+kind = "bin"
+main = "upstream/sha512-256sum.c"
+
+[targets.sha512sum]
+kind = "bin"
+main = "upstream/sha512sum.c"
+
+[targets.sleep]
+kind = "bin"
+main = "upstream/sleep.c"
+
+[targets.sort]
+kind = "bin"
+main = "upstream/sort.c"
+
+[targets.split]
+kind = "bin"
+main = "upstream/split.c"
+
+[targets.sponge]
+kind = "bin"
+main = "upstream/sponge.c"
+
+[targets.strings]
+kind = "bin"
+main = "upstream/strings.c"
+
+[targets.sync]
+kind = "bin"
+main = "upstream/sync.c"
+
+[targets.tail]
+kind = "bin"
+main = "upstream/tail.c"
+
+[targets.tar]
+kind = "bin"
+main = "upstream/tar.c"
+
+[targets.tee]
+kind = "bin"
+main = "upstream/tee.c"
+
+[targets.test]
+kind = "bin"
+main = "upstream/test.c"
+
+[targets.tftp]
+kind = "bin"
+main = "upstream/tftp.c"
+
+[targets.time]
+kind = "bin"
+main = "upstream/time.c"
+
+[targets.touch]
+kind = "bin"
+main = "upstream/touch.c"
+
+[targets.tr]
+kind = "bin"
+main = "upstream/tr.c"
+
+[targets.true]
+kind = "bin"
+main = "upstream/true.c"
+
+[targets.tsort]
+kind = "bin"
+main = "upstream/tsort.c"
+
+[targets.tty]
+kind = "bin"
+main = "upstream/tty.c"
+
+[targets.uname]
+kind = "bin"
+main = "upstream/uname.c"
+
+[targets.unexpand]
+kind = "bin"
+main = "upstream/unexpand.c"
+
+[targets.uniq]
+kind = "bin"
+main = "upstream/uniq.c"
+
+[targets.unlink]
+kind = "bin"
+main = "upstream/unlink.c"
+
+[targets.uudecode]
+kind = "bin"
+main = "upstream/uudecode.c"
+
+[targets.uuencode]
+kind = "bin"
+main = "upstream/uuencode.c"
+
+[targets.wc]
+kind = "bin"
+main = "upstream/wc.c"
+
+[targets.which]
+kind = "bin"
+main = "upstream/which.c"
+
+[targets.whoami]
+kind = "bin"
+main = "upstream/whoami.c"
+
+[targets.xargs]
+kind = "bin"
+main = "upstream/xargs.c"
+
+[targets.xinstall]
+kind = "bin"
+main = "upstream/xinstall.c"
+
+[targets.yes]
+kind = "bin"
+main = "upstream/yes.c"
