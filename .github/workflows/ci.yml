@@ -78,7 +78,7 @@ jobs:
           # only the specification. What mcpp reported was one package requested
           # as a path and as a version at once, which named neither the copy nor
           # the change.
-          bash "$beside/openkal-musl/tools/working-trees.sh" "$branch"
+          bash "$beside/openkal-musl/tools/working-trees.sh" "$branch" '${{ matrix.target }}'
 
           # And this package's own reference to the C library.
           native() { if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
