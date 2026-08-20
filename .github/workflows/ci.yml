@@ -121,12 +121,15 @@ jobs:
         if: matrix.wine
         run: |
           sudo apt-get update -qq
-          # The package is named for the architecture and the program is not:
-          # this distribution's wine has one binary called `wine', and a script
-          # that calls `wine64' fails with "command not found" after a
-          # successful install.
-          sudo apt-get install -y --no-install-recommends wine64 > /dev/null
-          wine --version
+          # Which package carries it and what the program is called differ
+          # between distributions and between releases of one, so both are
+          # tried and the name that exists is the one used.
+          sudo apt-get install -y --no-install-recommends wine wine64 > /dev/null 2>&1 \
+            || sudo apt-get install -y --no-install-recommends wine > /dev/null
+          runner="$(command -v wine || command -v wine64)"
+          test -n "$runner" || { echo "no wine was installed" >&2; exit 1; }
+          "$runner" --version
+          echo "ORACLE_WINE=$runner" >> "$GITHUB_ENV"
 
       - name: All ninety-seven tools build
         run: |
@@ -141,6 +144,15 @@ jobs:
 
       - name: What they produce is what the system produces
         if: '!matrix.wine'
+        env:
+          # The shell on one of the three systems rewrites an argument that
+          # looks like a path into that system's spelling before the program
+          # sees it, so `dirname /usr/src/file.c' is asked about a directory
+          # under the shell's own installation. The comparisons are about what
+          # the tools do with what they are given, so they are given what this
+          # script wrote.
+          MSYS2_ARG_CONV_EXCL: '*'
+          MSYS_NO_PATHCONV: '1'
         run: |
           sh tests/oracle.sh "$(dirname "$(find target -type f -path '*/bin/*' \( -name wc -o -name wc.exe \) | head -1)")"
 
@@ -162,7 +174,7 @@ jobs:
           for exe in $(find target -type f -name '*.exe' -path '*/bin/*'); do
             n="$(basename "$exe" .exe)"
             cp "$exe" "$out/$n.exe"
-            printf '#!/bin/sh\nexec wine "%s/%s.exe" "$@"\n' "$out" "$n" > "$out/$n"
+            printf '#!/bin/sh\nexec %s "%s/%s.exe" "$@"\n' "$ORACLE_WINE" "$out" "$n" > "$out/$n"
             chmod +x "$out/$n"
           done
           # wine names this system's root as a volume of its own, which is the
