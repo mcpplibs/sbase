@@ -16,6 +16,15 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      deps_ref:
+        description: >-
+          The branch to take the C library and everything beneath it from.
+          Empty means the branch under test, and then the default branch of each.
+          It exists so that this repository can be checked against work that is
+          still on a branch elsewhere.
+        required: false
+        default: ''
 
 env:
   MCPP_VERSION: 2026.8.19.4
@@ -49,7 +58,7 @@ jobs:
       # version a manifest names.
       - name: The C library, the specification, and the implementation
         run: |
-          branch='${{ github.head_ref || github.ref_name }}'
+          branch='${{ inputs.deps_ref || github.head_ref || github.ref_name }}'
           beside="$(cd .. && pwd)"
 
           case '${{ matrix.target }}${{ matrix.os }}' in
@@ -59,14 +68,7 @@ jobs:
           esac
 
           for repo in openkal-musl openkal "$implementation"; do
-            git clone --quiet "https://github.com/mcpplibs/$repo.git" "$beside/$repo" || {
-              # The C library's repository was named openkal-libc before it was
-              # named for what it is. A clone that fails on the new name is
-              # retried on the old one, so that this workflow works either side
-              # of the rename.
-              [ "$repo" = openkal-musl ] || exit 1
-              git clone --quiet https://github.com/mcpplibs/openkal-libc.git "$beside/openkal-musl"
-            }
+            git clone --quiet "https://github.com/mcpplibs/$repo.git" "$beside/$repo"
             if git -C "$beside/$repo" rev-parse --verify --quiet "origin/$branch" > /dev/null; then
               git -C "$beside/$repo" checkout --quiet "origin/$branch"
               echo "$repo is at $branch"
@@ -119,8 +121,12 @@ jobs:
         if: matrix.wine
         run: |
           sudo apt-get update -qq
+          # The package is named for the architecture and the program is not:
+          # this distribution's wine has one binary called `wine', and a script
+          # that calls `wine64' fails with "command not found" after a
+          # successful install.
           sudo apt-get install -y --no-install-recommends wine64 > /dev/null
-          wine64 --version
+          wine --version
 
       - name: All ninety-seven tools build
         run: |
@@ -156,7 +162,7 @@ jobs:
           for exe in $(find target -type f -name '*.exe' -path '*/bin/*'); do
             n="$(basename "$exe" .exe)"
             cp "$exe" "$out/$n.exe"
-            printf '#!/bin/sh\nexec wine64 "%s/%s.exe" "$@"\n' "$out" "$n" > "$out/$n"
+            printf '#!/bin/sh\nexec wine "%s/%s.exe" "$@"\n' "$out" "$n" > "$out/$n"
             chmod +x "$out/$n"
           done
           # wine names this system's root as a volume of its own, which is the
