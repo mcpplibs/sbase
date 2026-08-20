@@ -58,7 +58,7 @@ the subject here.
 
 ```toml
 [dependencies]
-openkal-musl = "0.1.0"
+openkal-musl = "0.3.0"
 ```
 
 No operating system is named, no implementation of openkal is named, and no
